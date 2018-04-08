@@ -9,6 +9,23 @@ data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
 type Variables = Int
 type Clauses = [Int]
 
+getmodels :: Num a => Bintree t -> a
+getmodels SAT = 1
+getmodels UNSAT = 0
+getmodels (Node a t1 t2) = (getmodels t1) + (getmodels t2)
+
+getmodelsconfig v SAT = [v]
+getmodelsconfig v UNSAT = [[]]
+getmodelsconfig v (Node a t1 t2) = (getmodelsconfig (v ++ [a]) t1 ) ++ (getmodelsconfig (v ++ [(-a)]) t2)
+
+
+checkmodel _ SAT = True
+checkmodel _ UNSAT = False
+checkmodel v (Node a t1 t2) |  elem a v     =   checkmodel v t1
+                            |  elem (-a) v  =   checkmodel v t2
+                            |  otherwise    =   False
+
+
 remove :: Eq a => a -> [a] -> [a]
 remove element list = filter (\e -> e/=element) list
 
@@ -35,13 +52,12 @@ generate (Formula v c t) = ( getclauses v c t, [1..v])
 clauseElem :: (Eq a, Num a) => [[a]] -> a -> [[a]]
 clauseElem cs v = [(remove (-1*v) k) | k <- cs , not (elem v k)]
 
+generateforvo :: CNFFormula -> [Variables] -> ([Clauses], [Variables])
+generateforvo (Formula v c t) v1 = (getclauses v c t, v1)
+
 decision_up (cs,v)  | elem [] cs    =   UNSAT
                     | v == []       =   SAT
                     | otherwise     =   unitPropogate (cs,v) (findsinglevar cs)
-                    -- | (findsinglevar cs) == 0 =   dpll (cs,v)
-                    -- | (findsinglevar cs) > 0  =   Node (abs (findsinglevar cs)) (decision_up (clauseElem cs (findsinglevar cs), L.delete (abs (findsinglevar cs)) v)) UNSAT
-                    -- | otherwise =   Node (abs (findsinglevar cs)) UNSAT (decision_up (clauseElem cs (findsinglevar cs), L.delete (abs (findsinglevar cs)) v))
-                    
 
 -- finds var present in single length clause from clauses if any
 findsinglevar [] = 0
@@ -53,16 +69,6 @@ unitPropogate (cs,v) decV   | decV == 0 =   dpll (cs,v)
                             | decV > 0  =   Node (abs decV) (decision_up (clauseElem cs decV, L.delete (abs decV) v)) UNSAT
                             | otherwise =   Node (abs decV) UNSAT (decision_up (clauseElem cs decV, L.delete (abs decV) v))
 
-
-
--- decisionneg_up :: (Eq a, Num a) => ([[a]], [a]) -> ([[a]], [a])
--- decisionneg_up (cs,v)         =      (clauseElem cs (-1*(head v)), drop 1 v)
-
-
--- dpll (cs,v)  | elem [] cs    =   UNSAT
---             | v == []        =   SAT
---             | otherwise      =   Node (head v) (decision_up (clauseElem cs decV, L.delete (abs decV) v) (head v)) (decision_up (clauseElem cs decV, L.delete (abs decV) v) (-1*(head v)))
-
 dpll (cs,v)  | elem [] cs    =   UNSAT
             | v == []        =   SAT
             | otherwise      =   Node (head v) (decision_up (clauseElem cs (head v), tail v)) (decision_up (clauseElem cs (-1*(head v)), tail v))
@@ -71,5 +77,4 @@ dpll (cs,v)  | elem [] cs    =   UNSAT
 main :: IO()
 main = do
     cnftext <- getContents
-    print $ dpll $ generate $ parseCNF (scanTokens cnftext)
-    -- print $ parseCNF (scanTokens cnftext)
+    print $ getmodelsconfig [] $ dpll $ generate $ parseCNF (scanTokens cnftext)
