@@ -8,6 +8,23 @@ data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
 type Variables = Int
 type Clauses = [Int]
 
+getmodels :: Num a => Bintree t -> a
+getmodels SAT = 1
+getmodels UNSAT = 0
+getmodels (Node a t1 t2) = (getmodels t1) + (getmodels t2)
+
+getmodelsconfig v SAT = [v]
+getmodelsconfig v UNSAT = [[]]
+getmodelsconfig v (Node a t1 t2) = (getmodelsconfig (v ++ [a]) t1 ) ++ (getmodelsconfig (v ++ [(-a)]) t2)
+
+
+checkmodel _ SAT = True
+checkmodel _ UNSAT = False
+checkmodel v (Node a t1 t2) |  elem a v     =   checkmodel v t1
+                            |  elem (-a) v  =   checkmodel v t2
+                            |  otherwise    =   False
+
+
 remove :: Eq a => a -> [a] -> [a]
 remove element list = filter (\e -> e/=element) list
 
@@ -30,6 +47,10 @@ getclauses v n (PartialFormulaJoined a b) = getclause v a:(getclauses v (n-1) b)
 generate :: CNFFormula -> ([Clauses] , [Variables])
 generate (Formula v c t) = ( getclauses v c t, [1..v])
 
+generateforvo :: CNFFormula -> [Variables] -> ([Clauses], [Variables])
+generateforvo (Formula v c t) v1 = (getclauses v c t, v1)
+
+
 poselem :: (Eq a, Foldable t) => [t a] -> a -> [t a]
 poselem c v = [k | k <- c , not (elem v k)]
 
@@ -49,4 +70,4 @@ dpll (c,v)  | elem [] c      =   UNSAT
 main :: IO()
 main = do
     cnftext <- getContents
-    print $ dpll $ generate $ parseCNF (scanTokens cnftext)
+    print $ getmodelsconfig [] $ dpll $ generate $ parseCNF (scanTokens cnftext)
