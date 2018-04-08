@@ -2,6 +2,7 @@ module Main where
 import System.IO
 import CNFTokens
 import CNFGrammar
+import Data.List as L
 
 data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
 
@@ -30,23 +31,45 @@ getclauses v n (PartialFormulaJoined a b) = getclause v a:(getclauses v (n-1) b)
 generate :: CNFFormula -> ([Clauses] , [Variables])
 generate (Formula v c t) = ( getclauses v c t, [1..v])
 
-poselem :: (Eq a, Foldable t) => [t a] -> a -> [t a]
-poselem c v = [k | k <- c , not (elem v k)]
+-- removes clauses containing dec var and removes neg dec var from clauses
+clauseElem :: (Eq a, Num a) => [[a]] -> a -> [[a]]
+clauseElem cs v = [(remove (-1*v) k) | k <- cs , not (elem v k)]
 
-decisionpos_up :: (Eq a, Foldable t) => ([t a], [a]) -> ([t a], [a])
-decisionpos_up (c,v)         =      (poselem c (head v), drop 1 v)
+decision_up (cs,v)  | elem [] cs    =   UNSAT
+                    | v == []       =   SAT
+                    | otherwise     =   unitPropogate (cs,v) (findsinglevar cs)
+                    -- | (findsinglevar cs) == 0 =   dpll (cs,v)
+                    -- | (findsinglevar cs) > 0  =   Node (abs (findsinglevar cs)) (decision_up (clauseElem cs (findsinglevar cs), L.delete (abs (findsinglevar cs)) v)) UNSAT
+                    -- | otherwise =   Node (abs (findsinglevar cs)) UNSAT (decision_up (clauseElem cs (findsinglevar cs), L.delete (abs (findsinglevar cs)) v))
+                    
 
-negelem :: Eq a => [[a]] -> a -> [[a]]
-negelem c v = map (remove v) c
+-- finds var present in single length clause from clauses if any
+findsinglevar [] = 0
+findsinglevar (c:cs) | (length c) == 1  =   (head c)
+                     | otherwise        =   findsinglevar cs
 
-decisionneg_up (c,v)         =      (negelem c (head v), drop 1 v)
+-- check if a single variable clause is present, and further call decision on that variable decV
+unitPropogate (cs,v) decV   | decV == 0 =   dpll (cs,v)
+                            | decV > 0  =   Node (abs decV) (decision_up (clauseElem cs decV, L.delete (abs decV) v)) UNSAT
+                            | otherwise =   Node (abs decV) UNSAT (decision_up (clauseElem cs decV, L.delete (abs decV) v))
 
 
-dpll (c,v)  | elem [] c      =   UNSAT
+
+-- decisionneg_up :: (Eq a, Num a) => ([[a]], [a]) -> ([[a]], [a])
+-- decisionneg_up (cs,v)         =      (clauseElem cs (-1*(head v)), drop 1 v)
+
+
+-- dpll (cs,v)  | elem [] cs    =   UNSAT
+--             | v == []        =   SAT
+--             | otherwise      =   Node (head v) (decision_up (clauseElem cs decV, L.delete (abs decV) v) (head v)) (decision_up (clauseElem cs decV, L.delete (abs decV) v) (-1*(head v)))
+
+dpll (cs,v)  | elem [] cs    =   UNSAT
             | v == []        =   SAT
-            | otherwise      =   Node (head v) (dpll (decisionpos_up (c,v))) (dpll (decisionneg_up (c,v)))
+            | otherwise      =   Node (head v) (decision_up (clauseElem cs (head v), tail v)) (decision_up (clauseElem cs (-1*(head v)), tail v))
+
 
 main :: IO()
 main = do
     cnftext <- getContents
     print $ dpll $ generate $ parseCNF (scanTokens cnftext)
+    -- print $ parseCNF (scanTokens cnftext)

@@ -3,3 +3,4 @@ Main
 *.hi
 *.y
 *.x
+test/
