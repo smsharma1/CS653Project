@@ -5,13 +5,11 @@ import CNFGrammar
 import Data.List as L
 import Data.Maybe
 
-data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
-
 type Variables = Int
 type Clauses = [Int]
 type Literal = Int
 
-
+data Status = SAT | UNSAT deriving Show
 
 remove :: Eq a => a -> [a] -> [a]
 remove element list = filter (\e -> e/=element) list
@@ -35,6 +33,8 @@ getclauses v n (PartialFormulaJoined a b) = getclause v a:(getclauses v (n-1) b)
 generate :: CNFFormula -> ([Clauses] , [Variables])
 generate (Formula v c t) = ( getclauses v c t, [1..v])
 
+
+-- UNIT PROPOGATION
 remove_unit l []    =  []
 remove_unit l (c:cs) |  (elem l c)  =  (remove_unit l cs) 
                      | otherwise    =  ((filter (\li -> li /= (-l)) c): (remove_unit l cs))
@@ -54,33 +54,78 @@ unit_propogation (cs,v) = case up of
                             Just l -> Just (remove_unit l cs, assignproper l v)
                             where up = unit cs
 
+
+--Pure Literal Elemination
+
+check_ple_on_l cs v = case ((or (map (elem v) cs)), (or (map (elem (-v)) cs))) of 
+                            (True,False) -> (True,v)
+                            (True,True)   -> (False,1)
+                            (False,True)  -> (True,(-v))
+                            (False,False)  -> (False,1) 
+                            
+check_ple []  v      =  (False,1)
+check_ple _ []       =  (False,1)
+check_ple cs (v:vs)  = case (check_ple_on_l cs  v) of 
+                                (True,v') -> (True,v')
+                                (False,_) ->  check_ple cs vs
+
+pure_literal_elemination (cs,v)   = case (check_ple cs v ) of 
+                                    (True,v')        ->       Just ((remove_unit v' cs),assignproper v' v)
+                                    (False,_)           ->       Nothing
+
+--Resolution Propogation
+
+
 checkleinclause c = or [and [(elem (-l) c),(elem l c)]  | l <- c] 
 
-check_le []     = False
-check_le (c:cs) | checkleinclause c  = True
-                | otherwise          = check_le cs
-doleinclause []     =   []
-doleinclause (c:cs)   |  (elem (-c) cs) = doleinclause (remove (-c) cs)
-                    |  otherwise      = c:(doleinclause cs)
+--check_le []     = False
+--check_le (c:cs) | checkleinclause c  = True
+--                | otherwise          = check_le cs
+
 dole []      = []
-dole (c:cs)  | checkleinclause c    =  (doleinclause c : dole cs)
+dole (c:cs)  | checkleinclause c    =   dole cs
              | otherwise            =  c:(dole cs)
 
-literal_elemination cs |  check_le cs   =  Just (dole cs)
-                       |  otherwise     =  Nothing
-    
---dp ([],v) = (SAT, v)
---dp (cs,v) | elem [] cs      =  (UNSAT,v)
---          | otherwise = case up of 
---                            Just (cs', v') -> dp (cs',v')
---                            Nothing        -> case le of 
---                                                Just cs'' -> dp (cs'',v)
---                                                Nothing          -> dp ((resolution_propogation cs),v)
---                            where up = unit_propogation (cs,v)
---                                  le = literal_elemination cs
+literal_elemination cs  =  dole cs
+
+countlit cs l = 
+    let m = length (filter (elem l) cs ) in
+    let n = length (filter (elem (-l)) cs ) in 
+    abs (m*n - m - n)
+
+most_efficient_literal _ [x] = x
+most_efficient_literal cs (x:y:xs) | (countlit cs x) < (countlit cs y)  = most_efficient_literal cs (y:xs)
+                                   | otherwise                          = most_efficient_literal cs (x:xs)
+ 
+allpairsunion s1 s2 = [sort (union a b) | a <- s1 , b <- s2]
+
+resolve l cs =
+            let (pos, others) = L.partition (elem l) cs in
+            let (neg, others') = L.partition (elem (-l)) others in
+            let set1 = nub (map (filter (\t -> t /= l)) (nub pos) ) in
+            let set2 = nub (map (filter (\t -> t /= (-l))) (nub neg) ) in 
+            union (nub (allpairsunion set1 set2)) cs
 
 
---main :: IO()
---main = do
---    cnftext <- getContents
---    print $ dp $ generate $ parseCNF (scanTokens cnftext)
+resolution_propogation (cs,v) = 
+    let p = most_efficient_literal cs v in
+        resolve p cs
+
+
+--Main Algorithm 
+
+dp ([],v) = (SAT, v)
+dp (cs,v) | elem [] cs      =  (UNSAT,error "No assignment possible")
+          | otherwise = case up of 
+                            Just (cs', v') -> dp (literal_elemination cs',v')
+                            Nothing        -> case le of 
+                                                Just (cs'',v'') -> dp (literal_elemination cs'',v'')
+                                                Nothing   -> dp (literal_elemination (resolution_propogation (cs,v)),v)
+                            where up = unit_propogation (cs,v)
+                                  le = pure_literal_elemination (cs,v)
+
+
+main :: IO()
+main = do
+    cnftext <- getContents
+    print $ dp (generate $ parseCNF (scanTokens cnftext))
