@@ -47,11 +47,11 @@ findFirstPureLit (cs,(v:vs)) | (isVPureLit (cs,v)) = v
 pureLitElem (cs,vs) = takeDecision (cs,vs) (findFirstPureLit (cs,vs))
 
 takeDecision (cs, vs) decV | decV==0 = dpll (cs,vs)
-                        | otherwise = pureLitElem ((clauseElem cs decV), L.delete (abs decV) vs)
+                        | otherwise = (\(sat, ass) -> (sat, (decV:ass))) (pureLitElem ((clauseElem cs decV), L.delete (abs decV) vs))
 
 
-decision_up (cs,vs)  | elem [] cs    =   False
-                    | vs == []       =   True
+decision_up (cs,vs)  | elem [] cs    =   (False, [])
+                    | vs == []       =   (True, [])
                     | otherwise     =   unitPropogate (cs,vs) (findsinglevar cs)
 
 -- finds var present in single length clause from clauses if any
@@ -61,17 +61,23 @@ findsinglevar (c:cs) | (length c) == 1  =   (head c)
 
 -- check if a single variable clause is present, and further call decision on that variable decV
 unitPropogate (cs,vs) decV   | decV == 0 =   pureLitElem (cs,vs)
-                            | otherwise =   decision_up (clauseElem cs decV, L.delete (abs decV) vs)
+                            | otherwise =  (\(sat, ass) -> (sat, (decV:ass))) (decision_up (clauseElem cs decV, L.delete (abs decV) vs))
 
 -- returns at first True due to lazy evaluation
-dpll (cs,vs)  | elem [] cs    =   False
-            | vs == []        =   True
-            | otherwise      =   (decision_up (clauseElem cs (head vs), tail vs)) || (decision_up (clauseElem cs (-1*(head vs)), tail vs))
+dpll (cs,vs)  | elem [] cs    =   (False, [])
+            | vs == []        =   (True, [])
+            | otherwise      =  chooseLiteral (cs,vs) (decision_up (clauseElem cs (head vs), tail vs)) (decision_up (clauseElem cs (-1*(head vs)), tail vs))
 
-dpllStatus (cs,vs) | (dpll (cs,vs)) = SAT
-                   | otherwise = UNSAT
+chooseLiteral (cs,vs) = \(sat1, ass1) (sat2,ass2) -> case sat1 of 
+                                                        True -> (True, (head vs):ass1)
+                                                        False -> case sat2 of
+                                                                    True -> (True, (head vs):ass2)
+                                                                    False -> (False, [])
+
+-- dpllStatus (cs,vs) = \(sat, ass) -> case sat of 
+--                                         True -> 
 
 main :: IO()
 main = do
     cnftext <- getContents
-    print $ dpllStatus $ generate $ parseCNF (scanTokens cnftext)
+    print $ dpll $ generate $ parseCNF (scanTokens cnftext)
