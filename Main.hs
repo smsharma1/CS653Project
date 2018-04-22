@@ -3,6 +3,8 @@ import System.IO
 import CNFTokens
 import CNFGrammar
 import Data.List as L
+import System.Environment
+
 
 data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
 
@@ -73,8 +75,21 @@ dpll (cs,v)  | elem [] cs    =   UNSAT
             | v == []        =   SAT
             | otherwise      =   Node (head v) (decision_up (clauseElem cs (head v), tail v)) (decision_up (clauseElem cs (-1*(head v)), tail v))
 
+generatevo 0 b c = b
+generatevo a b c = generatevo (a-1) (b ++ [(read (head c) :: Int)]) (drop 1 c)
+
+getmodel a [] = a
+getmodel a b  = getmodel (a ++ [(read (head b) :: Int)]) (drop 1 b)
+
 
 main :: IO()
 main = do
-    cnftext <- getContents
-    print $ getmodelsconfig [] $ dpll $ generate $ parseCNF (scanTokens cnftext)
+    args <- getArgs
+    handle <- openFile (head args) ReadMode
+    cnftext <- hGetContents handle
+    if ((args !! 1) == "getmodels") then (print $ getmodels $ dpll $ generate $ parseCNF (scanTokens cnftext))
+    else (if ((args !! 1) == "tree") then  (print $ dpll $ generate $ parseCNF (scanTokens cnftext))
+    else (if ((args !! 1) == "vo") then  (print $ dpll $ generateforvo (parseCNF (scanTokens cnftext)) (generatevo (read (args !! 2)::Int) [] (drop 3 args)))
+    else (if ((args !! 1) == "checkmodel") then  (print $ checkmodel (getmodel [] (drop 2 args)) (dpll $ generate $ parseCNF (scanTokens cnftext)))        
+    else (if ((args !! 1) == "getmodelsconfig") then  (print $ filter (not . null) (nub ( getmodelsconfig [] (dpll $ generate $ parseCNF (scanTokens cnftext)))))
+            else ( putStrLn "Insufficient commands")))))
