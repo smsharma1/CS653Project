@@ -4,6 +4,8 @@ import CNFTokens
 import CNFGrammar
 import Data.List as L
 import Data.Maybe
+import System.Environment
+import Data.Time
 
 type Variables = Int
 type Clauses = [Int]
@@ -127,5 +129,11 @@ dp (cs,v) | elem [] cs      =  (UNSAT,error "No assignment possible")
 
 main :: IO()
 main = do
-    cnftext <- getContents
+    start <- getCurrentTime
+    args <- getArgs
+    handle <- openFile (head args) ReadMode
+    cnftext <- hGetContents handle
     print $ dp (generate $ parseCNF (scanTokens cnftext))
+    putStrLn "The time taken by DP is \n"
+    end <- getCurrentTime
+    print (diffUTCTime end start)
