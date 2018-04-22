@@ -6,6 +6,8 @@ import Data.List as L
 import Prelude hiding (lookup)
 import Data.Map
 import Debug.Trace
+import System.Environment
+import Data.Time
 
 type Variables = Int
 type Clauses = [Int]
@@ -94,5 +96,11 @@ maxTuple k a result | (snd result) > a = result
 
 main :: IO()
 main = do
-    cnftext <- getContents
+    start <- getCurrentTime
+    args <- getArgs
+    handle <- openFile (head args) ReadMode
+    cnftext <- hGetContents handle
     print $ dpll $ generate $ parseCNF (scanTokens cnftext)
+    putStrLn "The time taken by DP is \n"
+    end <- getCurrentTime
+    print (diffUTCTime end start)

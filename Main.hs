@@ -4,6 +4,7 @@ import CNFTokens
 import CNFGrammar
 import Data.List as L
 import System.Environment
+import Data.Time
 
 
 data Bintree a = Node a (Bintree a) (Bintree a) | SAT | UNSAT deriving Show
@@ -84,6 +85,7 @@ getmodel a b  = getmodel (a ++ [(read (head b) :: Int)]) (drop 1 b)
 
 main :: IO()
 main = do
+    start <- getCurrentTime
     args <- getArgs
     handle <- openFile (head args) ReadMode
     cnftext <- hGetContents handle
@@ -93,3 +95,7 @@ main = do
     else (if ((args !! 1) == "checkmodel") then  (print $ checkmodel (getmodel [] (drop 2 args)) (dpll $ generate $ parseCNF (scanTokens cnftext)))        
     else (if ((args !! 1) == "getmodelsconfig") then  (print $ filter (not . null) (nub ( getmodelsconfig [] (dpll $ generate $ parseCNF (scanTokens cnftext)))))
             else ( putStrLn "Insufficient commands")))))
+    putStrLn "The time taken by DP is \n"
+    end <- getCurrentTime
+    print (diffUTCTime end start)
+
