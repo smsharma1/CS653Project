@@ -3,6 +3,9 @@ import System.IO
 import CNFTokens
 import CNFGrammar
 import Data.List as L
+import Prelude hiding (lookup)
+import Data.Map
+import Debug.Trace
 
 type Variables = Int
 type Clauses = [Int]
@@ -10,7 +13,7 @@ type Clauses = [Int]
 data Status = SAT | UNSAT deriving Show
 
 remove :: Eq a => a -> [a] -> [a]
-remove element list = filter (\e -> e/=element) list
+remove element list = Prelude.filter (\e -> e/=element) list
 
 literal :: Int -> CNFFormula -> Int
 literal v (Literal a) = if v < a then error "Parsing Error" else a
@@ -38,7 +41,7 @@ clauseElem cs v = [(remove (-1*v) k) | k <- cs , not (elem v k)]
 generateforvo :: CNFFormula -> [Variables] -> ([Clauses], [Variables])
 generateforvo (Formula v c t) v1 = (getclauses v c t, v1)
 
-isVPureLit (cs,v) = (or (map (elem v) cs)) /= (or (map (elem (-1 * v)) cs))
+isVPureLit (cs,v) = (or (Prelude.map (elem v) cs)) /= (or (Prelude.map (elem (-1 * v)) cs))
 
 findFirstPureLit (cs,[]) = 0
 findFirstPureLit (cs,(v:vs)) | (isVPureLit (cs,v)) = v
@@ -51,8 +54,8 @@ takeDecision (cs, vs) decV | decV==0 = dpll (cs,vs)
 
 
 decision_up (cs,vs)  | elem [] cs    =   (False, [])
-                    | vs == []       =   (True, [])
-                    | otherwise     =   unitPropogate (cs,vs) (findsinglevar cs)
+                    | vs == []       =  (True, [])
+                    | otherwise     =  unitPropogate (cs,vs) (findsinglevar cs)
 
 -- finds var present in single length clause from clauses if any
 findsinglevar [] = 0
@@ -66,16 +69,28 @@ unitPropogate (cs,vs) decV   | decV == 0 =   pureLitElem (cs,vs)
 -- returns at first True due to lazy evaluation
 dpll (cs,vs)  | elem [] cs    =   (False, [])
             | vs == []        =   (True, [])
-            | otherwise      =  chooseLiteral (cs,vs) (decision_up (clauseElem cs (head vs), tail vs)) (decision_up (clauseElem cs (-1*(head vs)), tail vs))
+            | otherwise      =  branchLiteral decV (decision_up (clauseElem cs decV, L.delete (abs decV) vs)) (decision_up (clauseElem cs (-1*decV), L.delete (abs decV) vs))
+                                where decV = chooseLit (cs,vs) 
 
-chooseLiteral (cs,vs) = \(sat1, ass1) (sat2,ass2) -> case sat1 of 
-                                                        True -> (True, (head vs):ass1)
+branchLiteral decV = \(sat1, ass1) ~(sat2,ass2) -> case sat1 of 
+                                                        True -> (True, decV:ass1)                                                        
                                                         False -> case sat2 of
-                                                                    True -> (True, (head vs):ass2)
+                                                                    True -> (True, decV:ass2)                                                                    
                                                                     False -> (False, [])
 
--- dpllStatus (cs,vs) = \(sat, ass) -> case sat of 
---                                         True -> 
+-- For DLIS                                               
+createDict (cs, vs) = populate cs (createEmpty vs)
+
+createEmpty vs = fromList [(v, 0) | v<-vs]
+
+populate cs myDict = Prelude.foldr addClauseToDict myDict cs 
+
+addClauseToDict clause newDict = Prelude.foldr (\x -> adjustWithKey (\_-> (+ 1)) (abs x)) newDict clause
+ 
+chooseLit (cs,vs) = fst (foldrWithKey maxTuple (0,0) (createDict (cs,vs)))
+
+maxTuple k a result | (snd result) > a = result
+                    | otherwise = (k,a)
 
 main :: IO()
 main = do
