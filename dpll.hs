@@ -101,6 +101,6 @@ main = do
     handle <- openFile (head args) ReadMode
     cnftext <- hGetContents handle
     print $ dpll $ generate $ parseCNF (scanTokens cnftext)
-    putStrLn "The time taken by DP is \n"
+    putStrLn "The time taken by DPLL is \n"
     end <- getCurrentTime
     print (diffUTCTime end start)
