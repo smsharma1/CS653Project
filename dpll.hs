@@ -43,11 +43,18 @@ clauseElem cs v = [(remove (-1*v) k) | k <- cs , not (elem v k)]
 generateforvo :: CNFFormula -> [Variables] -> ([Clauses], [Variables])
 generateforvo (Formula v c t) v1 = (getclauses v c t, v1)
 
-isVPureLit (cs,v) = (or (Prelude.map (elem v) cs)) /= (or (Prelude.map (elem (-1 * v)) cs))
+isVPureLit (cs,v) = case ((or (Prelude.map (elem v) cs)), (or (Prelude.map (elem (-v)) cs))) of 
+                        (True,False) -> v
+                        (True,True)   -> 0
+                        (False,True)  -> (-v)
+                        (False,False)  -> 0 
+-- isVPureLit (cs,v) = (or (Prelude.map (elem v) cs)) /= (or (Prelude.map (elem (-1 * v)) cs))
 
 findFirstPureLit (cs,[]) = 0
-findFirstPureLit (cs,(v:vs)) | (isVPureLit (cs,v)) = v
-                        | otherwise = findFirstPureLit (cs,vs)
+findFirstPureLit (cs,(v:vs)) = case x of 
+                                0 -> findFirstPureLit (cs,vs)
+                                _ -> x
+                                where x = isVPureLit (cs,v)
 
 pureLitElem (cs,vs) = takeDecision (cs,vs) (findFirstPureLit (cs,vs))
 
@@ -69,12 +76,16 @@ unitPropogate (cs,vs) decV   | decV == 0 =   pureLitElem (cs,vs)
                             | otherwise =  (\(sat, ass) -> (sat, (decV:ass))) (decision_up (clauseElem cs decV, L.delete (abs decV) vs))
 
 -- returns at first True due to lazy evaluation
-dpll (cs,vs)  | elem [] cs    =   (False, [])
+dpll (cs,vs)  | elem [] cs    = (False, [])
             | vs == []        =   (True, [])
-            | otherwise      =  branchLiteral decV (decision_up (clauseElem cs decV, L.delete (abs decV) vs)) (decision_up (clauseElem cs (-1*decV), L.delete (abs decV) vs))
-                                where decV = chooseLit (cs,vs) 
+            | otherwise      =  let decV = chooseLit (cs,vs)
+                                    a1 = (decision_up (clauseElem cs decV, L.delete (abs decV) vs))
+                                    a2 = (decision_up (clauseElem cs (-1*decV), L.delete (abs decV) vs))
+                                in (branchLiteral decV a1 a2)
+                -- branchLiteral decV (decision_up (clauseElem cs decV, L.delete (abs decV) vs)) (decision_up (clauseElem cs (-1*decV), L.delete (abs decV) vs))
+                --                 where decV = chooseLit (cs,vs) 
 
-branchLiteral decV = \(sat1, ass1) ~(sat2,ass2) -> case sat1 of 
+branchLiteral decV = \(sat1, ass1) (sat2,ass2) -> case sat1 of 
                                                         True -> (True, decV:ass1)                                                        
                                                         False -> case sat2 of
                                                                     True -> (True, decV:ass2)                                                                    
@@ -93,6 +104,11 @@ chooseLit (cs,vs) = fst (foldrWithKey maxTuple (0,0) (createDict (cs,vs)))
 
 maxTuple k a result | (snd result) > a = result
                     | otherwise = (k,a)
+
+-- main :: IO()
+-- main = do
+--     cnftext <- getContents
+--     print $ dpll $ generate $ parseCNF (scanTokens cnftext)
 
 main :: IO()
 main = do
